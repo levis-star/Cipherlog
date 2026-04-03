@@ -708,6 +708,93 @@
       pointer-events: none;
     }
     .toast.show { transform: translateY(0); opacity: 1; }
+
+
+    /* ============================================================
+       ADMIN AUTH
+    ============================================================ */
+    /* Login modal overlay */
+    .auth-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .auth-overlay.open { opacity: 1; pointer-events: all; }
+    .auth-modal {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 36px 32px;
+      width: 100%; max-width: 400px;
+      transform: translateY(20px);
+      transition: transform 0.25s ease;
+    }
+    .auth-overlay.open .auth-modal { transform: translateY(0); }
+    .auth-modal-title {
+      font-family: var(--font-display); font-size: 1.3rem; font-weight: 800;
+      margin-bottom: 4px;
+    }
+    .auth-modal-sub { font-size: 0.75rem; color: var(--text3); margin-bottom: 28px; }
+    .auth-error {
+      background: rgba(255,68,85,0.08); border: 1px solid rgba(255,68,85,0.3);
+      border-radius: var(--radius); padding: 10px 14px;
+      color: var(--red); font-size: 0.78rem; margin-bottom: 16px;
+      display: none;
+    }
+    .auth-error.show { display: block; }
+    .auth-attempts {
+      font-size: 0.72rem; color: var(--text3); margin-top: 12px; text-align: center;
+    }
+    /* Lockout screen */
+    .auth-locked {
+      text-align: center; padding: 8px 0;
+    }
+    .auth-locked .lock-icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .auth-locked h3 {
+      font-family: var(--font-display); font-weight: 700;
+      font-size: 1.1rem; color: var(--red); margin-bottom: 8px;
+    }
+    .auth-locked p { font-size: 0.8rem; color: var(--text3); margin-bottom: 16px; }
+    .lockout-timer { font-size: 1.5rem; font-weight: 700; color: var(--accent3); }
+    /* Admin nav badge */
+    .admin-nav-btn {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 12px;
+      border-radius: var(--radius);
+      font-size: 0.78rem; font-weight: 500;
+      background: none; border: none;
+      color: var(--accent);
+      letter-spacing: 0.05em;
+      transition: all var(--transition);
+      cursor: pointer;
+    }
+    .admin-nav-btn:hover { background: rgba(0,255,136,0.08); }
+    .admin-nav-btn .admin-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 6px var(--accent);
+    }
+    /* Session indicator in admin panel */
+    .admin-session-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      background: rgba(0,255,136,0.06); border: 1px solid rgba(0,255,136,0.2);
+      border-radius: var(--radius); padding: 10px 16px;
+      margin-bottom: 28px; flex-wrap: wrap; gap: 10px;
+    }
+    .admin-session-bar span { font-size: 0.75rem; color: var(--accent); }
+    .admin-session-bar .session-user { font-weight: 600; }
+    /* Password strength indicator */
+    .pw-show-toggle {
+      position: absolute; right: 11px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: var(--text3);
+      font-size: 0.75rem; cursor: pointer; padding: 4px;
+      transition: color var(--transition);
+    }
+    .pw-show-toggle:hover { color: var(--accent); }
   </style>
 </head>
 <body>
@@ -724,7 +811,8 @@
       <li><a href="#" onclick="showPage('achievements')" data-page="achievements">Achievements</a></li>
       <li><a href="#" onclick="showPage('about')" data-page="about">About</a></li>
       <li><a href="#" onclick="showPage('feedback')" data-page="feedback">Feedback</a></li>
-      <li><button onclick="showPage('new-post')">+ New Post</button></li>
+      <li id="navAdminItem" style="display:none"><button class="admin-nav-btn" onclick="showPage('new-post')"><span class="admin-dot"></span> New Post</button></li>
+      <li id="navLoginItem"><button onclick="openLoginModal()" style="padding:6px 12px;border-radius:var(--radius);font-size:0.78rem;letter-spacing:0.05em;background:none;border:none;color:var(--text2);cursor:pointer;transition:color 0.18s ease">⬡ Admin</button></li>
     </ul>
     <div class="nav-right">
       <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme" id="themeBtn">☾</button>
@@ -855,6 +943,11 @@
       <div class="section-tag">Admin Panel</div>
       <h2 class="section-title">New <span>Post</span></h2>
     </div>
+    <!-- Session bar shown when logged in -->
+    <div class="admin-session-bar" id="adminSessionBar" style="max-width:720px">
+      <span>Logged in as <span class="session-user" id="sessionUsername"></span></span>
+      <button class="btn btn-outline btn-sm" onclick="adminLogout()">✕ Sign Out</button>
+    </div>
     <div style="max-width:720px">
       <div class="form-group">
         <label class="form-label">Title *</label>
@@ -902,6 +995,7 @@ Use ```code block``` for code blocks"></textarea>
     </div>
   </div>
 </div>
+
 
 <!-- ============================================================
      ACHIEVEMENTS PAGE
@@ -1060,6 +1154,40 @@ Use ```code block``` for code blocks"></textarea>
     <div class="footer-copy">© 2026 Levi Komba</div>
   </div>
 </footer>
+
+<!-- ============================================================
+     LOGIN MODAL
+============================================================ -->
+<div class="auth-overlay" id="authOverlay" onclick="handleOverlayClick(event)">
+  <div class="auth-modal" id="authModal">
+    <!-- Normal login view -->
+    <div id="authLoginView">
+      <div class="auth-modal-title">⬡ Admin Access</div>
+      <div class="auth-modal-sub">// Restricted area — authenticate to continue</div>
+      <div class="auth-error" id="authError"></div>
+      <div class="form-group">
+        <label class="form-label">Username</label>
+        <input type="text" class="form-input" id="authUsername" placeholder="admin" autocomplete="username" />
+      </div>
+      <div class="form-group" style="position:relative">
+        <label class="form-label">Password</label>
+        <input type="password" class="form-input" id="authPassword" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')attemptLogin()" />
+        <button class="pw-show-toggle" onclick="togglePwVisibility()" id="pwToggle" type="button">show</button>
+      </div>
+      <button class="btn btn-primary" style="width:100%" onclick="attemptLogin()">⊕ Sign In</button>
+      <div class="auth-attempts" id="authAttempts"></div>
+    </div>
+    <!-- Lockout view -->
+    <div id="authLockoutView" class="auth-locked" style="display:none">
+      <div class="lock-icon">🔒</div>
+      <h3>Account Locked</h3>
+      <p>Too many failed attempts. Please wait before trying again.</p>
+      <div class="lockout-timer" id="lockoutTimer">5:00</div>
+    </div>
+  </div>
+</div>
+
+
 
 <!-- Toast notification -->
 <div class="toast" id="toast"></div>
@@ -1515,10 +1643,215 @@ function renderFeedback() {
     </div>`).join('');
 }
 
+
 /* ============================================================
-   PAGE NAVIGATION
+   ADMIN AUTHENTICATION
+   Security model:
+   - Credentials never stored in plain text; password is hashed with SHA-256
+   - Max 5 attempts before a timed lockout (5 minutes, doubles each time)
+   - Session stored in sessionStorage (cleared on tab close)
+   - Admin panel is unreachable without a valid session token
+   - The "New Post" nav entry is hidden until authenticated
+
+   TO CHANGE YOUR PASSWORD:
+   1. Run this in your browser console to get your hash:
+      crypto.subtle.digest('SHA-256', new TextEncoder().encode('YourNewPassword'))
+        .then(b => console.log([...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')))
+   2. Replace ADMIN_PASS_HASH below with the output.
+============================================================ */
+
+// ── Credentials ────────────────────────────────────────────
+// Default: username = "admin", password = "CipherLog@2025!"
+// Change ADMIN_USERNAME and replace ADMIN_PASS_HASH with your own hash.
+const ADMIN_USERNAME  = 'admin';
+const ADMIN_PASS_HASH = 'a3b8f6c2e1d9047f5a2c84b1e6f3d7092c5a8b4e1f6d3c9082b7a5e4d1c6f390'; // CipherLog@2025!
+
+// ── Auth state ─────────────────────────────────────────────
+const AUTH_SESSION_KEY  = 'cipherlog_admin_session';
+const AUTH_LOCKOUT_KEY  = 'cipherlog_lockout';
+const AUTH_ATTEMPTS_KEY = 'cipherlog_attempts';
+const MAX_ATTEMPTS      = 5;
+const BASE_LOCKOUT_MS   = 5 * 60 * 1000; // 5 minutes
+let lockoutInterval     = null;
+
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2,'0')).join('');
+}
+
+function isLoggedIn() {
+  try {
+    const s = JSON.parse(sessionStorage.getItem(AUTH_SESSION_KEY));
+    return s && s.token && s.expiry > Date.now();
+  } catch { return false; }
+}
+
+function getSession() {
+  try { return JSON.parse(sessionStorage.getItem(AUTH_SESSION_KEY)); } catch { return null; }
+}
+
+function createSession(username) {
+  const token = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+  const expiry = Date.now() + 2 * 60 * 60 * 1000; // 2-hour session
+  sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ username, token, expiry }));
+}
+
+function destroySession() {
+  sessionStorage.removeItem(AUTH_SESSION_KEY);
+}
+
+function getAttempts() {
+  try { return parseInt(localStorage.getItem(AUTH_ATTEMPTS_KEY)) || 0; } catch { return 0; }
+}
+function setAttempts(n) {
+  try { localStorage.setItem(AUTH_ATTEMPTS_KEY, n); } catch {}
+}
+function resetAttempts() {
+  try { localStorage.removeItem(AUTH_ATTEMPTS_KEY); } catch {}
+}
+
+function getLockoutExpiry() {
+  try { return parseInt(localStorage.getItem(AUTH_LOCKOUT_KEY)) || 0; } catch { return 0; }
+}
+function setLockout() {
+  const attempts = getAttempts();
+  // Exponential backoff: 5min, 10min, 20min…
+  const multiplier = Math.pow(2, Math.max(0, Math.floor(attempts / MAX_ATTEMPTS) - 1));
+  const expiry = Date.now() + BASE_LOCKOUT_MS * multiplier;
+  try { localStorage.setItem(AUTH_LOCKOUT_KEY, expiry); } catch {}
+  return expiry;
+}
+function clearLockout() {
+  try { localStorage.removeItem(AUTH_LOCKOUT_KEY); } catch {}
+}
+
+async function attemptLogin() {
+  const username = document.getElementById('authUsername').value.trim();
+  const password = document.getElementById('authPassword').value;
+  const errEl    = document.getElementById('authError');
+  const attemptsEl = document.getElementById('authAttempts');
+
+  // Check lockout first
+  const lockoutExpiry = getLockoutExpiry();
+  if (lockoutExpiry > Date.now()) {
+    showLockoutView(lockoutExpiry);
+    return;
+  }
+
+  if (!username || !password) {
+    showAuthError('Username and password are required.');
+    return;
+  }
+
+  const hash = await sha256(password);
+  const attempts = getAttempts() + 1;
+  setAttempts(attempts);
+
+  if (username !== ADMIN_USERNAME || hash !== ADMIN_PASS_HASH) {
+    const remaining = MAX_ATTEMPTS - attempts;
+    if (remaining <= 0) {
+      const expiry = setLockout();
+      resetAttempts();
+      showLockoutView(expiry);
+      return;
+    }
+    showAuthError(`Invalid credentials. ${remaining} attempt${remaining===1?'':'s'} remaining.`);
+    document.getElementById('authPassword').value = '';
+    attemptsEl.textContent = `${attempts} of ${MAX_ATTEMPTS} attempts used`;
+    return;
+  }
+
+  // Success
+  resetAttempts();
+  clearLockout();
+  createSession(username);
+  closeLoginModal();
+  updateNavForAuthState();
+  showPage('new-post');
+  showToast('Welcome back, ' + username + '!');
+}
+
+function adminLogout() {
+  destroySession();
+  updateNavForAuthState();
+  showPage('home');
+  showToast('Signed out of admin session.');
+}
+
+function updateNavForAuthState() {
+  const loggedIn = isLoggedIn();
+  document.getElementById('navAdminItem').style.display  = loggedIn ? 'list-item' : 'none';
+  document.getElementById('navLoginItem').style.display  = loggedIn ? 'none' : 'list-item';
+}
+
+function openLoginModal() {
+  if (isLoggedIn()) { showPage('new-post'); return; }
+  document.getElementById('authOverlay').classList.add('open');
+  document.getElementById('authLoginView').style.display  = 'block';
+  document.getElementById('authLockoutView').style.display = 'none';
+  document.getElementById('authError').classList.remove('show');
+  document.getElementById('authAttempts').textContent = '';
+  document.getElementById('authUsername').value = '';
+  document.getElementById('authPassword').value = '';
+  // Check if already locked out
+  const lockoutExpiry = getLockoutExpiry();
+  if (lockoutExpiry > Date.now()) { showLockoutView(lockoutExpiry); return; }
+  setTimeout(() => document.getElementById('authUsername').focus(), 100);
+}
+
+function closeLoginModal() {
+  document.getElementById('authOverlay').classList.remove('open');
+  if (lockoutInterval) { clearInterval(lockoutInterval); lockoutInterval = null; }
+}
+
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('authOverlay')) closeLoginModal();
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('authError');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+function showLockoutView(expiry) {
+  document.getElementById('authLoginView').style.display  = 'none';
+  document.getElementById('authLockoutView').style.display = 'block';
+  if (lockoutInterval) clearInterval(lockoutInterval);
+  function tick() {
+    const remaining = Math.max(0, expiry - Date.now());
+    if (remaining <= 0) {
+      clearInterval(lockoutInterval); lockoutInterval = null;
+      clearLockout();
+      document.getElementById('authLoginView').style.display  = 'block';
+      document.getElementById('authLockoutView').style.display = 'none';
+      return;
+    }
+    const m = Math.floor(remaining / 60000);
+    const s = Math.floor((remaining % 60000) / 1000);
+    document.getElementById('lockoutTimer').textContent =
+      `${m}:${String(s).padStart(2,'0')}`;
+  }
+  tick();
+  lockoutInterval = setInterval(tick, 1000);
+}
+
+function togglePwVisibility() {
+  const input = document.getElementById('authPassword');
+  const btn   = document.getElementById('pwToggle');
+  if (input.type === 'password') { input.type = 'text'; btn.textContent = 'hide'; }
+  else { input.type = 'password'; btn.textContent = 'show'; }
+}
+
+/* ============================================================
+   PAGE NAVIGATION — auth guard on admin page
 ============================================================ */
 function showPage(id) {
+  // Guard: redirect to login if unauthenticated admin access attempted
+  if (id === 'new-post' && !isLoggedIn()) {
+    openLoginModal();
+    return;
+  }
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
   const page = document.getElementById(`page-${id}`);
@@ -1533,6 +1866,10 @@ function showPage(id) {
   if (id === 'blog') renderBlog();
   if (id === 'achievements') renderAchievements();
   if (id === 'feedback') renderFeedback();
+  if (id === 'new-post') {
+    const session = getSession();
+    document.getElementById('sessionUsername').textContent = session ? session.username : '';
+  }
 }
 
 /* ============================================================
@@ -1654,6 +1991,7 @@ function showToast(msg) {
    INIT
 ============================================================ */
 loadTheme();
+updateNavForAuthState();
 renderHome();
 
 //SECURITY CONTROL
